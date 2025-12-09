@@ -31,8 +31,50 @@ interface CommunityPageProps {
   sidebarCollapsed?: boolean;
 }
 
+type CommunityAuthor = {
+  displayName: string;
+  avatar?: string;
+  role?: string;
+};
+
+type CommunityReply = {
+  id: string;
+  authorId: string;
+  author: CommunityAuthor;
+  content: string;
+  likesCount: number;
+  createdAt: Date;
+  liked: boolean;
+};
+
+type CommunityEvent = {
+  id: string;
+  title: string;
+  type: 'virtual' | 'in-person' | 'release';
+  startDate: Date;
+  endDate?: Date;
+  location: string;
+  rsvpCount: number;
+  maxAttendees: number;
+};
+
+type CommunityPost = {
+  id: string;
+  authorId: string;
+  author: CommunityAuthor;
+  content: string;
+  type: 'text' | 'event';
+  likesCount: number;
+  repliesCount: number;
+  createdAt: Date;
+  liked: boolean;
+  replies: CommunityReply[];
+  eventId?: string;
+  event?: CommunityEvent;
+};
+
 // Mock data for community posts  
-const MOCK_POSTS: any[] = [
+const MOCK_POSTS: CommunityPost[] = [
   {
     id: '1',
     authorId: 'user-1',
@@ -131,20 +173,21 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
   const currentUser = userQuery.data;
 
   // Initialize posts from localStorage or fallback to MOCK_POSTS
-  const [posts, setPosts] = useState(() => {
+  const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const savedPosts = localStorage.getItem('gameforge-community-posts');
     if (savedPosts) {
       try {
         const parsed = JSON.parse(savedPosts);
         // Convert date strings back to Date objects
-        return parsed.map((post: any) => ({
+        return parsed.map((post: CommunityPost) => ({
           ...post,
           createdAt: new Date(post.createdAt),
           event: post.event ? {
             ...post.event,
-            startDate: new Date(post.event.startDate)
+            startDate: new Date(post.event.startDate),
+            endDate: post.event.endDate ? new Date(post.event.endDate) : undefined,
           } : undefined,
-          replies: post.replies?.map((reply: any) => ({
+          replies: post.replies?.map((reply: CommunityReply) => ({
             ...reply,
             createdAt: new Date(reply.createdAt)
           })) || []
@@ -161,7 +204,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
   const [filter, setFilter] = useState<'all' | 'posts' | 'events'>('all');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
 
   // Event creation state
   const [eventTitle, setEventTitle] = useState('');
@@ -175,14 +218,14 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
     localStorage.setItem('gameforge-community-posts', JSON.stringify(posts));
   }, [posts]);
 
-  const filteredPosts = posts.filter(post => {
+  const filteredPosts = posts.filter((post) => {
     if (filter === 'posts') return post.type === 'text';
     if (filter === 'events') return post.type === 'event';
     return true;
   });
 
   const handleLikePost = (postId: string) => {
-    setPosts(prev => prev.map(post => {
+    setPosts((prev) => prev.map((post) => {
       if (post.id === postId) {
         return {
           ...post,
@@ -195,13 +238,13 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
   };
 
   const handleLikeReply = (postId: string, replyId: string) => {
-    let updatedPost: any = null;
-    
-    setPosts(prev => prev.map(post => {
+    let updatedPost: CommunityPost | null = null;
+
+    setPosts((prev) => prev.map((post) => {
       if (post.id === postId) {
         updatedPost = {
           ...post,
-          replies: post.replies.map((reply: any) => {
+          replies: post.replies.map((reply) => {
             if (reply.id === replyId) {
               return {
                 ...reply,
@@ -226,7 +269,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
   const handleReply = (postId: string) => {
     if (!replyContent.trim()) return;
 
-    const newReply = {
+    const newReply: CommunityReply = {
       id: `reply-${Date.now()}`,
       authorId: currentUser.id,
       author: {
@@ -240,9 +283,9 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
       liked: false,
     };
 
-    let updatedPost: any = null;
+    let updatedPost: CommunityPost | null = null;
 
-    setPosts(prev => prev.map(post => {
+    setPosts((prev) => prev.map((post) => {
       if (post.id === postId) {
         updatedPost = {
           ...post,
@@ -263,18 +306,20 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
     setReplyingTo(null);
   };
 
-  const handleRsvpEvent = (post: any) => {
+    const handleRsvpEvent = (post: CommunityPost) => {
     if (!post.event) return;
 
     // Add event to calendar
-    const calendarEvent = {
-      id: post.event.id || `event-${Date.now()}`,
-      title: post.event.title,
-      description: post.content,
-      type: post.event.type,
-      startDate: post.event.startDate,
-      endDate: post.event.endDate,
-      location: post.event.location,
+      const eventEndDate = post.event.endDate ?? new Date(post.event.startDate.getTime() + 2 * 60 * 60 * 1000);
+
+      const calendarEvent = {
+        id: post.event.id || `event-${Date.now()}`,
+        title: post.event.title,
+        description: post.content,
+        type: post.event.type,
+        startDate: post.event.startDate,
+        endDate: eventEndDate,
+        location: post.event.location,
       createdBy: post.authorId,
       creator: post.author,
       rsvpCount: post.event.rsvpCount || 0,
@@ -303,22 +348,22 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
     if (newPostType === 'event' && !eventTitle) return;
     if (newPostType !== 'event' && !newPostContent.trim()) return;
 
-    let newPost: any = {
-      id: `post-${Date.now()}`,
-      authorId: currentUser.id,
-      author: {
-        displayName: currentUser.displayName,
-        avatar: currentUser.avatar || undefined,
-        role: currentUser.jobTitle || currentUser.role
-      },
-      content: newPostContent,
-      type: newPostType,
-      likesCount: 0,
-      repliesCount: 0,
-      createdAt: new Date(),
-      liked: false,
-      replies: []
-    };
+      let newPost: CommunityPost = {
+        id: `post-${Date.now()}`,
+        authorId: currentUser.id,
+        author: {
+          displayName: currentUser.displayName,
+          avatar: currentUser.avatar || undefined,
+          role: currentUser.jobTitle || currentUser.role
+        },
+        content: newPostContent,
+        type: newPostType,
+        likesCount: 0,
+        repliesCount: 0,
+        createdAt: new Date(),
+        liked: false,
+        replies: [] as CommunityReply[],
+      };
 
     if (newPostType === 'event' && eventTitle) {
       console.log('Creating event post', { eventTitle, eventType, eventDate, eventLocation });
@@ -341,29 +386,37 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
       };
       
       // Auto-add event to Calendar
-      const endDate = new Date(eventStartDate.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours duration
-      const calendarEvent = {
-        id: newPost.eventId,
-        title: eventTitle,
-        description: newPostContent || eventTitle, // Use title as fallback description
-        type: eventType,
-        startDate: eventStartDate,
-        endDate: endDate,
-        location: eventLocation,
-        createdBy: currentUser.id,
+        const endDate = new Date(eventStartDate.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours duration
+        const calendarEvent = {
+          id: newPost.eventId,
+          title: eventTitle,
+          description: newPostContent || eventTitle, // Use title as fallback description
+          type: eventType,
+          startDate: eventStartDate,
+          endDate: endDate,
+          location: eventLocation,
+          createdBy: currentUser.id,
         creator: {
           displayName: currentUser.displayName,
           avatar: currentUser.avatar || undefined,
           role: currentUser.jobTitle || currentUser.role
         },
         rsvpCount: 0,
-        maxAttendees: eventType === 'virtual' ? 100 : 30,
-        userRsvp: null,
-        createdAt: new Date()
-      };
-      console.log('Adding event to calendar integration', calendarEvent);
-      calendarIntegration.addEvent(calendarEvent);
-    }
+          maxAttendees: eventType === 'virtual' ? 100 : 30,
+          userRsvp: null,
+          createdAt: new Date()
+        };
+        console.log('Adding event to calendar integration', calendarEvent);
+        calendarIntegration.addEvent(calendarEvent);
+
+        newPost = {
+          ...newPost,
+          event: {
+            ...newPost.event!,
+            endDate,
+          },
+        };
+      }
 
     setPosts(prev => [newPost, ...prev]);
     
@@ -411,7 +464,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
+                <Select value={filter} onValueChange={(value: 'all' | 'posts' | 'events') => setFilter(value)}>
                 <SelectTrigger className="w-32" data-testid="select-filter">
                   <Filter className="w-4 h-4 mr-2" />
                   <SelectValue />
@@ -466,7 +519,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
                       />
                       
                       <div className="grid grid-cols-2 gap-3">
-                        <Select value={eventType} onValueChange={(value: any) => setEventType(value)}>
+                          <Select value={eventType} onValueChange={(value: 'virtual' | 'in-person' | 'release') => setEventType(value)}>
                           <SelectTrigger data-testid="select-event-type">
                             <SelectValue />
                           </SelectTrigger>
@@ -708,7 +761,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
                       {/* Replies */}
                       {post.replies.length > 0 && (
                         <div className="mt-4 space-y-4">
-                          {post.replies.map((reply: any) => (
+                          {post.replies.map((reply: CommunityReply) => (
                             <div key={reply.id} className="flex items-start space-x-3 pl-4 border-l-2 border-border">
                               <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-sm">
                                 {reply.author.avatar}
@@ -852,7 +905,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
                       e.stopPropagation();
                       handleLikePost(selectedPost.id);
                       // Update the selectedPost to reflect the change
-                      setSelectedPost((prev: any) => prev ? { ...prev, liked: !prev.liked, likesCount: prev.liked ? prev.likesCount - 1 : prev.likesCount + 1 } : null);
+                      setSelectedPost((prev: CommunityPost | null) => prev ? { ...prev, liked: !prev.liked, likesCount: prev.liked ? prev.likesCount - 1 : prev.likesCount + 1 } : null);
                     }}
                     className={`${selectedPost.liked ? 'text-red-500' : ''}`}
                     data-testid="detailed-button-like"
@@ -915,7 +968,7 @@ export default function CommunityPage({ sidebarCollapsed = false }: CommunityPag
                   {/* Display Existing Replies */}
                   {selectedPost.replies.length > 0 && (
                     <div className="space-y-4">
-                      {selectedPost.replies.map((reply: any) => (
+                      {selectedPost.replies.map((reply: CommunityReply) => (
                         <div key={reply.id} className="flex items-start space-x-3 p-4 border border-border rounded-lg">
                           <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-sm">
                             {reply.author.avatar}

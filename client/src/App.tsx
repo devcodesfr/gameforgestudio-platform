@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Router, Route, useLocation } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { apiRequest } from "@/lib/queryClient";
 import { Sidebar } from "@/components/sidebar";
@@ -52,11 +53,20 @@ const PlaceholderSection = ({ title, description, sidebarCollapsed }: { title: s
 );
 
 function App() {
+  // Use hash-based routing on Replit (and optionally via env flag) so
+  // client-side navigations don't rely on server-side route handling.
+  const env = import.meta.env as Record<string, string | boolean | undefined>;
+  const shouldUseHashRouting =
+    typeof window !== "undefined" &&
+    (Boolean(env.REPL_ID) || env.VITE_ROUTER_MODE === "hash");
+
+  const routerHook = shouldUseHashRouting ? useHashLocation : undefined;
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <Router>
+          <Router hook={routerHook}>
             <div className="min-h-screen bg-background text-foreground">
               <ErrorBoundary>
                 <AppWithSidebar />
@@ -81,7 +91,7 @@ function AppWithSidebar() {
   // Apply theme based on user role with error handling
   useEffect(() => {
     try {
-      if (userQuery.data?.role === 'regular') {
+      if (userQuery.data && userQuery.data.role === 'regular') {
         document.documentElement.classList.add('regular-user-theme');
       } else {
         document.documentElement.classList.remove('regular-user-theme');

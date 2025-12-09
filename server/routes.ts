@@ -679,17 +679,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add game to library
-      const libraryItem = await storage.addToGameLibrary({
-        userId: req.session.userId,
-        gameId: game_id,
-        gameName: game_name,
-        gameIcon: game_icon || "🎮",
-        gameDescription: game_description || "",
-        purchasedAt: new Date(),
-        lastPlayed: null,
-        playTime: 0,
-        favorite: 0,
-      });
+        const libraryItem = await storage.addToGameLibrary({
+          userId: req.session.userId,
+          gameId: game_id,
+          gameName: game_name,
+          gameIcon: game_icon || "🎮",
+          gameDescription: game_description || "",
+          lastPlayed: null,
+          playTime: 0,
+          favorite: 0,
+        });
 
       res.status(201).json(libraryItem);
     } catch (error) {
