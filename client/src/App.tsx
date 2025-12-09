@@ -99,7 +99,7 @@ function AppWithSidebar() {
     } catch (error) {
       console.error('Error applying theme:', error);
     }
-  }, [userQuery.data?.role]);
+  }, [userQuery.data ? userQuery.data.role : undefined]);
   
   // Redirect unauthenticated users to login with loop prevention
   useEffect(() => {
