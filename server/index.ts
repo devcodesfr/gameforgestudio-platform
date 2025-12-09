@@ -100,6 +100,33 @@ app.use((req, res, next) => {
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = parseInt(process.env.PORT || '5000', 10);
+
+  app.post("/api/auth/signup", async (req: Request, res: Response) => {
+    try {
+      const { email, password, username } = req.body;
+      console.log("Signup data:", req.body);
+
+      return res.status(201).json({ message: "User created (placeholder)" });
+  } catch (err) {
+    console.error("Signup error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    console.log("Login data:", req.body);
+
+    return res.status(200).json({
+      message: "Login successful (placeholder)",
+      token: "fake-token",
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
     
     server.listen({
       port,
