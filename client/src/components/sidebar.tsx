@@ -42,6 +42,7 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5001";
 
   const handleLogout = async () => {
     try {
@@ -62,6 +63,10 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
     }
   };
 
+  const openExternalProduct = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   // Map navigation IDs to routes
   const getRouteForSection = (sectionId: string) => {
     switch (sectionId) {
@@ -69,7 +74,6 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
       case 'projects': return '/projects';
       case 'game-engines': return '/game-engines';
       case 'asset-store': return '/asset-store';
-      case 'collaboration': return '/buttonz';
       case 'distribution': return '/distribution';
       case 'analytics': return '/analytics';
       case 'community': return '/community';
@@ -123,8 +127,17 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
             <li key={item.id}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href={getRouteForSection(item.id)}>
+                  {item.external ? (
                     <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openExternalProduct(buttonzUrl)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openExternalProduct(buttonzUrl);
+                        }
+                      }}
                       className={`nav-item w-full flex items-center rounded-lg transition-all duration-200 cursor-pointer ${
                         collapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-4 py-3'
                       } ${
@@ -137,7 +150,23 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
                       <item.icon className={collapsed ? "w-7 h-7" : "w-6 h-6"} />
                       {!collapsed && <span className="font-medium">{item.label}</span>}
                     </div>
-                  </Link>
+                  ) : (
+                    <Link href={getRouteForSection(item.id)}>
+                      <div
+                        className={`nav-item w-full flex items-center rounded-lg transition-all duration-200 cursor-pointer ${
+                          collapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-4 py-3'
+                        } ${
+                          activeSection === item.id
+                            ? 'active text-primary-foreground'
+                            : 'hover:bg-accent text-foreground'
+                        }`}
+                        data-testid={`button-nav-${item.id}`}
+                      >
+                        <item.icon className={collapsed ? "w-7 h-7" : "w-6 h-6"} />
+                        {!collapsed && <span className="font-medium">{item.label}</span>}
+                      </div>
+                    </Link>
+                  )}
                 </TooltipTrigger>
                 <TooltipContent side="right">
                   <p>{item.label}</p>

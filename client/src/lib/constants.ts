@@ -1,12 +1,12 @@
 import { Home, FolderOpen, Settings, Store, Users, CloudUpload, BarChart3, MessageCircle, Calendar, Library as LibraryIcon, LucideIcon } from 'lucide-react';
 
-export const NAVIGATION_ITEMS: Array<{ id: string; icon: LucideIcon; label: string; roles?: ('developer' | 'regular')[] }> = [
+export const NAVIGATION_ITEMS: Array<{ id: string; icon: LucideIcon; label: string; roles?: ('developer' | 'regular')[]; external?: boolean }> = [
   { id: 'dashboard', icon: Home, label: 'Dashboard', roles: ['developer'] },
   { id: 'store', icon: Store, label: 'Store', roles: ['regular'] },
   { id: 'projects', icon: FolderOpen, label: 'Projects', roles: ['developer'] },
   { id: 'game-engines', icon: Settings, label: 'Game Engines', roles: ['developer'] },
   { id: 'asset-store', icon: Store, label: 'Asset Store', roles: ['developer'] },
-  { id: 'collaboration', icon: MessageCircle, label: 'Buttonz' },
+  { id: 'collaboration', icon: MessageCircle, label: 'Buttonz', external: true },
   { id: 'distribution', icon: CloudUpload, label: 'Distribution', roles: ['developer'] },
   { id: 'analytics', icon: BarChart3, label: 'Analytics', roles: ['developer'] },
   { id: 'community', icon: Users, label: 'Community' },

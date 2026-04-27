@@ -16,7 +16,6 @@ import AssetDetailPage from "@/pages/asset-detail";
 import BundleDetailPage from "@/pages/bundle-detail";
 import GameEnginesPage from "@/pages/game-engines";
 import CartPage from "@/pages/cart";
-import Buttonz from "@/pages/buttonz";
 import DistributionPage from "@/pages/distribution";
 import AnalyticsPage from "@/pages/analytics";
 import CommunityPage from "@/pages/community";
@@ -51,6 +50,28 @@ const PlaceholderSection = ({ title, description, sidebarCollapsed }: { title: s
     </div>
   </div>
 );
+
+function getDocumentTitle(path: string) {
+  if (path === "/login") return "GFS Login";
+  if (path === "/signup") return "GFS Signup";
+  if (path === "/" || path === "/dashboard") return "Dashboard";
+  if (path.startsWith("/projects")) return "Projects";
+  if (path.startsWith("/game-engines")) return "Game Engines";
+  if (path.startsWith("/asset-store")) return "Asset Store";
+  if (path.startsWith("/asset/")) return "Asset Store";
+  if (path.startsWith("/bundle/")) return "Asset Store";
+  if (path.startsWith("/cart")) return "Cart";
+  if (path.startsWith("/distribution")) return "Distribution";
+  if (path.startsWith("/analytics")) return "Analytics";
+  if (path.startsWith("/community")) return "Community";
+  if (path.startsWith("/calendar")) return "Calendar";
+  if (path.startsWith("/store")) return "Store";
+  if (path.startsWith("/library")) return "Library";
+  if (path.startsWith("/game/")) return "Game Details";
+  if (path.startsWith("/profile")) return "Profile";
+  if (path.startsWith("/settings")) return "Settings";
+  return "GameForge Studio";
+}
 
 function App() {
   // Use hash-based routing on Replit (and optionally via env flag) so
@@ -87,6 +108,10 @@ function AppWithSidebar() {
   const lastLocationRef = useRef(location);
   
   const userQuery = useCurrentUser();
+
+  useEffect(() => {
+    document.title = getDocumentTitle(location);
+  }, [location]);
   
   // Apply theme based on user role with error handling
   useEffect(() => {
@@ -147,11 +172,6 @@ function AppWithSidebar() {
     );
   }
   
-  // Handle full-screen standalone Buttonz outside sidebar layout
-  if (location === '/buttonz') {
-    return <Buttonz standalone={true} />;
-  }
-  
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
@@ -165,7 +185,6 @@ function AppWithSidebar() {
     if (path.startsWith("/asset/")) return "asset-store"; // Asset detail is part of asset store
     if (path.startsWith("/bundle/")) return "asset-store"; // Bundle detail is part of asset store
     if (path.startsWith("/cart")) return "asset-store"; // Cart is part of asset store
-    if (path.startsWith("/collaboration")) return "collaboration";
     if (path.startsWith("/distribution")) return "distribution";
     if (path.startsWith("/analytics")) return "analytics";
     if (path.startsWith("/community")) return "community";
@@ -205,9 +224,6 @@ function AppWithSidebar() {
       </Route>
       <Route path="/cart">
         <CartPage sidebarCollapsed={sidebarCollapsed} />
-      </Route>
-      <Route path="/collaboration">
-        <Buttonz sidebarCollapsed={sidebarCollapsed} />
       </Route>
       <Route path="/distribution">
         <DistributionPage sidebarCollapsed={sidebarCollapsed} />
