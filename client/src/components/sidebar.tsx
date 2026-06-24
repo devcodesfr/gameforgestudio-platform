@@ -65,7 +65,7 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
   };
 
   const openExternalProduct = (url: string) => {
-    window.location.href = url;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   // Map navigation IDs to routes

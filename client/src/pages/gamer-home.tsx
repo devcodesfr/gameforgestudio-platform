@@ -175,6 +175,9 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
   const userQuery = useCurrentUser();
   const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5175";
   const buttonzLaunchUrl = `${buttonzUrl}${buttonzUrl.includes("?") ? "&" : "?"}from=gfs`;
+  const openButtonz = () => {
+    window.open(buttonzLaunchUrl, "_blank", "noopener,noreferrer");
+  };
 
   const { data: projects = [], isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -238,9 +241,7 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
                   <Button
                     variant="outline"
                     className="rounded-xl border-primary/30"
-                    onClick={() => {
-                      window.location.href = buttonzLaunchUrl;
-                    }}
+                    onClick={openButtonz}
                   >
                     <ButtonzSidebarIcon className="mr-2 h-4 w-4" />
                     Launch Buttonz
@@ -359,9 +360,7 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
                 </p>
                 <Button
                   className="mt-5 w-full rounded-xl"
-                  onClick={() => {
-                    window.location.href = buttonzLaunchUrl;
-                  }}
+                  onClick={openButtonz}
                 >
                   Launch Buttonz
                 </Button>
