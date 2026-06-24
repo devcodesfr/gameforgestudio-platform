@@ -2,6 +2,7 @@ import type { Express, Request, RequestHandler, Response } from "express";
 import { createServer, type Server } from "http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { 
@@ -66,6 +67,22 @@ type CommunityPost = {
 };
 
 const COMMUNITY_POSTS_FILE = join(process.cwd(), "data", "community-posts.json");
+const BUTTONZ_HANDOFF_TTL_MS = 2 * 60 * 1000;
+const buttonzHandoffTokens = new Map<string, { userId: string; expiresAt: number }>();
+
+function withoutPassword(user: User) {
+  const { password, ...userResponse } = user;
+  return userResponse;
+}
+
+function pruneExpiredButtonzHandoffTokens() {
+  const now = Date.now();
+  for (const [token, handoff] of Array.from(buttonzHandoffTokens.entries())) {
+    if (handoff.expiresAt <= now) {
+      buttonzHandoffTokens.delete(token);
+    }
+  }
+}
 
 function reviveCommunityPost(p: Record<string, unknown>): CommunityPost {
   const eventRaw = p.event as Record<string, unknown> | undefined;
@@ -549,11 +566,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Return user without password
-      const { password, ...userResponse } = user;
-      res.json(userResponse);
+      res.json(withoutPassword(user));
     } catch (error) {
       console.error("Error getting current user:", error);
       res.status(500).json({ message: "Failed to get user" });
+    }
+  });
+
+  app.post("/api/auth/buttonz-handoff", requireAuth, async (req: Request, res: Response) => {
+    try {
+      pruneExpiredButtonzHandoffTokens();
+
+      const token = randomUUID();
+      buttonzHandoffTokens.set(token, {
+        userId: req.session.userId!,
+        expiresAt: Date.now() + BUTTONZ_HANDOFF_TTL_MS,
+      });
+
+      res.json({ token });
+    } catch (error) {
+      console.error("Error creating Buttonz handoff:", error);
+      res.status(500).json({ message: "Failed to create Buttonz handoff" });
+    }
+  });
+
+  app.post("/api/auth/buttonz-handoff/verify", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.body as { token?: string };
+      if (!token) {
+        return res.status(400).json({ message: "Handoff token is required" });
+      }
+
+      pruneExpiredButtonzHandoffTokens();
+
+      const handoff = buttonzHandoffTokens.get(token);
+      buttonzHandoffTokens.delete(token);
+
+      if (!handoff || handoff.expiresAt <= Date.now()) {
+        return res.status(401).json({ message: "Buttonz handoff token is invalid or expired" });
+      }
+
+      const user = await storage.getUser(handoff.userId);
+      if (!user) {
+        return res.status(401).json({ message: "Buttonz handoff user was not found" });
+      }
+
+      res.json(withoutPassword(user));
+    } catch (error) {
+      console.error("Error verifying Buttonz handoff:", error);
+      res.status(500).json({ message: "Failed to verify Buttonz handoff" });
     }
   });
 

@@ -7,6 +7,7 @@ import gameforgeIcon from "@assets/image_1762389418995.png";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { launchButtonz } from "@/lib/buttonz-launcher";
 import { getDefaultRouteForRole } from "@/lib/route-access";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -44,7 +45,6 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
     .slice(0, 2)
     .toUpperCase();
   const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5175";
-  const buttonzLaunchUrl = `${buttonzUrl}${buttonzUrl.includes("?") ? "&" : "?"}from=gfs`;
 
   const handleLogout = async () => {
     try {
@@ -65,8 +65,16 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
     }
   };
 
-  const openExternalProduct = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
+  const openExternalProduct = async () => {
+    try {
+      await launchButtonz(buttonzUrl);
+    } catch {
+      toast({
+        title: "Could not open Buttonz",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Map navigation IDs to routes
@@ -134,11 +142,11 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => openExternalProduct(buttonzLaunchUrl)}
+                      onClick={() => void openExternalProduct()}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          openExternalProduct(buttonzLaunchUrl);
+                          void openExternalProduct();
                         }
                       }}
                       className={`nav-item w-full flex items-center rounded-lg transition-all duration-200 cursor-pointer ${

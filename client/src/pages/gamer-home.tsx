@@ -18,6 +18,8 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ButtonzSidebarIcon } from "@/components/icons/buttonz-sidebar-icon";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useToast } from "@/hooks/use-toast";
+import { launchButtonz } from "@/lib/buttonz-launcher";
 import type { GameLibrary, Project } from "@shared/schema";
 
 interface GamerHomePageProps {
@@ -173,10 +175,18 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
   const [focusIndex, setFocusIndex] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<typeof featuredEvents[number] | null>(null);
   const userQuery = useCurrentUser();
+  const { toast } = useToast();
   const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5175";
-  const buttonzLaunchUrl = `${buttonzUrl}${buttonzUrl.includes("?") ? "&" : "?"}from=gfs`;
-  const openButtonz = () => {
-    window.open(buttonzLaunchUrl, "_blank", "noopener,noreferrer");
+  const openButtonz = async () => {
+    try {
+      await launchButtonz(buttonzUrl);
+    } catch {
+      toast({
+        title: "Could not open Buttonz",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    }
   };
 
   const { data: projects = [], isLoading: isLoadingProjects } = useQuery<Project[]>({
@@ -241,7 +251,7 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
                   <Button
                     variant="outline"
                     className="rounded-xl border-primary/30"
-                    onClick={openButtonz}
+                    onClick={() => void openButtonz()}
                   >
                     <ButtonzSidebarIcon className="mr-2 h-4 w-4" />
                     Launch Buttonz
@@ -360,7 +370,7 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
                 </p>
                 <Button
                   className="mt-5 w-full rounded-xl"
-                  onClick={openButtonz}
+                  onClick={() => void openButtonz()}
                 >
                   Launch Buttonz
                 </Button>
