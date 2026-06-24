@@ -140,6 +140,3 @@ The next phase is focused on making the platform behavior tighter and more produ
 
 - [Buttonz](https://github.com/devcodesfr/buttonz) - standalone communication app for the GameForgeStudio ecosystem.
 
-## Resume Notes
-
-This project highlights full-stack TypeScript development, role-based UX design, shared schema modeling, REST API design, session authentication, database-backed application architecture, and ecosystem-level product thinking.
