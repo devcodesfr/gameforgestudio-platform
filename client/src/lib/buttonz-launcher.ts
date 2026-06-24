@@ -4,6 +4,7 @@ function buildButtonzLaunchUrl(buttonzUrl: string, handoffToken: string) {
   const url = new URL(buttonzUrl);
   url.searchParams.set("from", "gfs");
   url.searchParams.set("handoff", handoffToken);
+  url.searchParams.set("gfsOrigin", window.location.origin);
   return url.toString();
 }
 
