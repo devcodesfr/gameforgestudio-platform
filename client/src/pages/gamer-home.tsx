@@ -176,10 +176,9 @@ export default function GamerHomePage({ sidebarCollapsed = false }: GamerHomePag
   const [selectedEvent, setSelectedEvent] = useState<typeof featuredEvents[number] | null>(null);
   const userQuery = useCurrentUser();
   const { toast } = useToast();
-  const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5175";
   const openButtonz = async () => {
     try {
-      await launchButtonz(buttonzUrl);
+      await launchButtonz();
     } catch {
       toast({
         title: "Could not open Buttonz",

@@ -44,7 +44,7 @@ This project is built as a professional in-progress platform: it demonstrates th
 
 ### Buttonz Integration
 
-Buttonz is maintained as a separate communication app in the GameForgeStudio ecosystem. GFS acts as the identity and navigation hub, launching Buttonz externally through `VITE_BUTTONZ_URL` instead of embedding it directly in the main platform.
+Buttonz is maintained as a separate communication app in the GameForgeStudio ecosystem. GFS acts as the identity and navigation hub, launching Buttonz externally through a backend-owned external app handoff instead of embedding it directly in the main platform.
 
 This keeps the communication layer independent while still letting users move from GFS into Buttonz with ecosystem context.
 
@@ -95,7 +95,11 @@ Copy `.env.example` to `.env` and fill in the values for your local or hosted da
 DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 SESSION_SECRET=replace-with-a-long-random-secret
 PORT=5000
-VITE_BUTTONZ_URL=http://localhost:5175
+GFS_PUBLIC_URL=http://localhost:5173
+GFS_API_URL=http://localhost:5000
+BUTTONZ_APP_ID=buttonz
+BUTTONZ_UI_URL=http://localhost:5175
+BUTTONZ_CALLBACK_URL=http://localhost:5175
 ```
 
 ### 3. Push the database schema

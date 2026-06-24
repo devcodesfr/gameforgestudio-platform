@@ -44,8 +44,6 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const buttonzUrl = import.meta.env.VITE_BUTTONZ_URL || "http://localhost:5175";
-
   const handleLogout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout", {});
@@ -67,7 +65,7 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
 
   const openExternalProduct = async () => {
     try {
-      await launchButtonz(buttonzUrl);
+      await launchButtonz();
     } catch {
       toast({
         title: "Could not open Buttonz",

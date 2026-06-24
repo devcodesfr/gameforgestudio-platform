@@ -67,21 +67,46 @@ type CommunityPost = {
 };
 
 const COMMUNITY_POSTS_FILE = join(process.cwd(), "data", "community-posts.json");
-const BUTTONZ_HANDOFF_TTL_MS = 2 * 60 * 1000;
-const buttonzHandoffTokens = new Map<string, { userId: string; expiresAt: number }>();
+const EXTERNAL_APP_AUTH_CODE_TTL_MS = 2 * 60 * 1000;
+const externalAppAuthCodes = new Map<string, {
+  userId: string;
+  appId: string;
+  redirectTarget: string;
+  expiresAt: number;
+}>();
 
 function withoutPassword(user: User) {
   const { password, ...userResponse } = user;
   return userResponse;
 }
 
-function pruneExpiredButtonzHandoffTokens() {
+function pruneExpiredExternalAppAuthCodes() {
   const now = Date.now();
-  for (const [token, handoff] of Array.from(buttonzHandoffTokens.entries())) {
-    if (handoff.expiresAt <= now) {
-      buttonzHandoffTokens.delete(token);
+  for (const [code, authCode] of Array.from(externalAppAuthCodes.entries())) {
+    if (authCode.expiresAt <= now) {
+      externalAppAuthCodes.delete(code);
     }
   }
+}
+
+function getButtonzExternalAppConfig() {
+  const appId = process.env.BUTTONZ_APP_ID;
+  const uiUrl = process.env.BUTTONZ_UI_URL;
+  const callbackUrl = process.env.BUTTONZ_CALLBACK_URL;
+  const gfsPublicUrl = process.env.GFS_PUBLIC_URL;
+  const gfsApiUrl = process.env.GFS_API_URL;
+
+  if (!appId || !uiUrl || !callbackUrl || !gfsPublicUrl || !gfsApiUrl) {
+    return undefined;
+  }
+
+  return {
+    appId,
+    uiUrl,
+    callbackUrl,
+    gfsPublicUrl,
+    gfsApiUrl,
+  };
 }
 
 function reviveCommunityPost(p: Record<string, unknown>): CommunityPost {
@@ -573,48 +598,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/buttonz-handoff", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/external-apps/buttonz/launch", requireAuth, async (req: Request, res: Response) => {
     try {
-      pruneExpiredButtonzHandoffTokens();
+      const config = getButtonzExternalAppConfig();
+      if (!config) {
+        return res.status(500).json({
+          message: "Buttonz external app configuration is incomplete",
+        });
+      }
 
-      const token = randomUUID();
-      buttonzHandoffTokens.set(token, {
+      pruneExpiredExternalAppAuthCodes();
+
+      const code = randomUUID();
+      externalAppAuthCodes.set(code, {
         userId: req.session.userId!,
-        expiresAt: Date.now() + BUTTONZ_HANDOFF_TTL_MS,
+        appId: config.appId,
+        redirectTarget: config.callbackUrl,
+        expiresAt: Date.now() + EXTERNAL_APP_AUTH_CODE_TTL_MS,
       });
 
-      res.json({ token });
+      const launchUrl = new URL(config.callbackUrl || config.uiUrl);
+      launchUrl.searchParams.set("from", "gfs");
+      launchUrl.searchParams.set("code", code);
+
+      res.json({ launchUrl: launchUrl.toString() });
     } catch (error) {
-      console.error("Error creating Buttonz handoff:", error);
-      res.status(500).json({ message: "Failed to create Buttonz handoff" });
+      console.error("Error creating Buttonz launch:", error);
+      res.status(500).json({ message: "Failed to create Buttonz launch" });
     }
   });
 
-  app.post("/api/auth/buttonz-handoff/verify", async (req: Request, res: Response) => {
+  app.post("/api/external-apps/buttonz/exchange", async (req: Request, res: Response) => {
     try {
-      const { token } = req.body as { token?: string };
-      if (!token) {
-        return res.status(400).json({ message: "Handoff token is required" });
+      const config = getButtonzExternalAppConfig();
+      if (!config) {
+        return res.status(500).json({
+          message: "Buttonz external app configuration is incomplete",
+        });
       }
 
-      pruneExpiredButtonzHandoffTokens();
-
-      const handoff = buttonzHandoffTokens.get(token);
-      buttonzHandoffTokens.delete(token);
-
-      if (!handoff || handoff.expiresAt <= Date.now()) {
-        return res.status(401).json({ message: "Buttonz handoff token is invalid or expired" });
+      const { code, appId } = req.body as { code?: string; appId?: string };
+      if (!code) {
+        return res.status(400).json({ message: "External app auth code is required" });
       }
 
-      const user = await storage.getUser(handoff.userId);
+      if (appId !== config.appId) {
+        return res.status(403).json({ message: "External app is not allowed to exchange this code" });
+      }
+
+      pruneExpiredExternalAppAuthCodes();
+
+      const authCode = externalAppAuthCodes.get(code);
+      externalAppAuthCodes.delete(code);
+
+      if (!authCode || authCode.expiresAt <= Date.now()) {
+        return res.status(401).json({ message: "External app auth code is invalid or expired" });
+      }
+
+      if (authCode.appId !== config.appId) {
+        return res.status(403).json({ message: "External app code was issued for a different app" });
+      }
+
+      const user = await storage.getUser(authCode.userId);
       if (!user) {
-        return res.status(401).json({ message: "Buttonz handoff user was not found" });
+        return res.status(401).json({ message: "External app auth user was not found" });
       }
 
       res.json(withoutPassword(user));
     } catch (error) {
-      console.error("Error verifying Buttonz handoff:", error);
-      res.status(500).json({ message: "Failed to verify Buttonz handoff" });
+      console.error("Error exchanging Buttonz auth code:", error);
+      res.status(500).json({ message: "Failed to exchange Buttonz auth code" });
     }
   });
 
