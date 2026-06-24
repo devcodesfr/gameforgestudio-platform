@@ -138,7 +138,7 @@ The next phase is focused on making the platform behavior tighter and more produ
 
 ## Related App
 
-- [Buttonz](../buttonz) - standalone communication app for the GameForgeStudio ecosystem.
+- [Buttonz](https://github.com/devcodesfr/buttonz) - standalone communication app for the GameForgeStudio ecosystem.
 
 ## Resume Notes
 
