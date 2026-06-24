@@ -30,6 +30,7 @@ import StorePage from "@/pages/store";
 import GameDetailPage from "@/pages/game-detail";
 import GameCartPage from "@/pages/game-cart";
 import { Card } from "@/components/ui/card";
+import { canAccessRoute, getDefaultRouteForRole } from "@/lib/route-access";
 
 // Placeholder components for other sections
 const PlaceholderSection = ({ title, description, sidebarCollapsed }: { title: string; description: string; sidebarCollapsed: boolean }) => (
@@ -111,6 +112,7 @@ function AppWithSidebar() {
   const lastLocationRef = useRef(location);
   
   const userQuery = useCurrentUser();
+  const isPublicRoute = location === '/login' || location === '/signup';
 
   useEffect(() => {
     if (location === "/" && userQuery.data?.role === "regular") {
@@ -120,6 +122,16 @@ function AppWithSidebar() {
 
     document.title = getDocumentTitle(location);
   }, [location, userQuery.data?.role]);
+
+  useEffect(() => {
+    if (!userQuery.data || isPublicRoute) {
+      return;
+    }
+
+    if (!canAccessRoute(location, userQuery.data.role)) {
+      setLocation(getDefaultRouteForRole(userQuery.data.role));
+    }
+  }, [isPublicRoute, location, setLocation, userQuery.data?.id, userQuery.data?.role]);
   
   // Apply theme based on user role with error handling
   useEffect(() => {
@@ -179,6 +191,17 @@ function AppWithSidebar() {
       </div>
     );
   }
+
+  if (userQuery.data && !canAccessRoute(location, userQuery.data.role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
   
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
@@ -199,11 +222,12 @@ function AppWithSidebar() {
     if (path.startsWith("/analytics")) return "analytics";
     if (path.startsWith("/community")) return "community";
     if (path.startsWith("/calendar")) return "calendar";
+    if (path.startsWith("/game/")) return "store";
     if (path.startsWith("/store")) return "store";
     if (path.startsWith("/library")) return "library";
     if (path.startsWith("/profile")) return "profile";
     if (path.startsWith("/settings")) return "settings";
-    return "dashboard";
+    return userQuery.data?.role === "regular" ? "home" : "dashboard";
   };
 
   const activeSection = getActiveSection(location);

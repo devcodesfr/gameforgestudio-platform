@@ -7,6 +7,7 @@ import gameforgeIcon from "@assets/image_1762389418995.png";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getDefaultRouteForRole } from "@/lib/route-access";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -82,7 +83,7 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
       case 'calendar': return '/calendar';
       case 'store': return '/store';
       case 'library': return '/library';
-      default: return '/dashboard';
+      default: return getDefaultRouteForRole(user?.role);
     }
   };
 
@@ -103,7 +104,7 @@ export function Sidebar({ activeSection, collapsed, onToggle }: SidebarProps) {
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
         {!collapsed && (
-          <Link href="/dashboard" className="flex-1">
+          <Link href={getDefaultRouteForRole(user?.role)} className="flex-1">
             <div className="flex items-center cursor-pointer space-x-3">
               <img 
                 src={gameforgeIcon} 

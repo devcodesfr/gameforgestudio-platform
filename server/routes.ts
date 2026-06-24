@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import { createServer, type Server } from "http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -14,6 +14,8 @@ import {
   insertChatMemberSchema,
   insertMessageSchema,
   type User,
+  UserRole,
+  type UserRoleType,
   ProjectStatus, 
   GameEngine, 
   Platform,
@@ -217,6 +219,58 @@ function validateAndSanitizeInput<T>(schema: z.ZodType<T>, data: unknown): T {
     }
     throw error;
   }
+}
+
+const requireAuth: RequestHandler = (req, res, next) => {
+  if (!req.session.userId) {
+    res.status(401).json({ message: "Not authenticated" });
+    return;
+  }
+
+  next();
+};
+
+function requireRole(...allowedRoles: UserRoleType[]): RequestHandler {
+  return async (req, res, next) => {
+    try {
+      if (!req.session.userId) {
+        res.status(401).json({ message: "Not authenticated" });
+        return;
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        req.session.destroy(() => {});
+        res.status(401).json({ message: "User not found" });
+        return;
+      }
+
+      if (!allowedRoles.includes(user.role as UserRoleType)) {
+        res.status(403).json({ message: "Forbidden for this role" });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+function requireSelfParam(paramName = "userId"): RequestHandler {
+  return (req, res, next) => {
+    if (!req.session.userId) {
+      res.status(401).json({ message: "Not authenticated" });
+      return;
+    }
+
+    if (req.params[paramName] !== req.session.userId) {
+      res.status(403).json({ message: "Can only access your own data" });
+      return;
+    }
+
+    next();
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -504,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get public user profiles for project author display
-  app.get("/api/users/public", async (req: Request, res: Response) => {
+  app.get("/api/users/public", requireAuth, async (req: Request, res: Response) => {
     try {
       const idsParam = typeof req.query.ids === "string" ? req.query.ids : "";
       const ids = Array.from(new Set(idsParam.split(",").map((id) => id.trim()).filter(Boolean)));
@@ -529,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all projects
-  app.get("/api/projects", async (req, res) => {
+  app.get("/api/projects", requireAuth, async (req, res) => {
     try {
       const projects = await storage.getAllProjects();
       res.json(projects);
@@ -539,7 +593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user's projects
-  app.get("/api/projects/user/:userId", async (req, res) => {
+  app.get("/api/projects/user/:userId", requireAuth, requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       const projects = await storage.getProjectsByUserId(userId);
@@ -550,7 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get specific project
-  app.get("/api/projects/:id", async (req, res) => {
+  app.get("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const project = await storage.getProject(id);
@@ -564,9 +618,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new project
-  app.post("/api/projects", async (req, res) => {
+  app.post("/api/projects", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
-      const projectData = insertProjectSchema.parse(req.body);
+      const projectData = insertProjectSchema.parse({
+        ...req.body,
+        ownerId: req.session.userId,
+      });
       const project = await storage.createProject(projectData);
       res.json(project);
     } catch (error) {
@@ -578,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update project with comprehensive validation
-  app.patch("/api/projects/:id", async (req, res) => {
+  app.patch("/api/projects/:id", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -587,15 +644,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format" });
       }
       
+      const existingProject = await storage.getProject(id);
+      if (!existingProject) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      if (existingProject.ownerId !== req.session.userId) {
+        return res.status(403).json({ message: "Not authorized to update this project" });
+      }
+
       // Validate and sanitize update data
       const validatedUpdates = validateAndSanitizeInput(updateProjectSchema, req.body);
+      const { ownerId, ...updatesWithoutOwnerId } = validatedUpdates;
+
+      if (ownerId && ownerId !== existingProject.ownerId) {
+        return res.status(403).json({ message: "Project ownership cannot be changed" });
+      }
       
       // Additional business logic validation
-      if (Object.keys(validatedUpdates).length === 0) {
+      if (Object.keys(updatesWithoutOwnerId).length === 0) {
         return res.status(400).json({ message: "No valid update fields provided" });
       }
       
-      const project = await storage.updateProject(id, validatedUpdates);
+      const project = await storage.updateProject(id, updatesWithoutOwnerId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
@@ -613,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete project
-  app.delete("/api/projects/:id", async (req, res) => {
+  app.delete("/api/projects/:id", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -647,7 +718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user metrics
-  app.get("/api/metrics/:userId", async (req, res) => {
+  app.get("/api/metrics/:userId", requireRole(UserRole.DEVELOPER), requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       const metrics = await storage.getMetricsByUserId(userId);
@@ -663,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Asset Store Routes
   
   // Get all assets or filter by category
-  app.get("/api/assets", async (req, res) => {
+  app.get("/api/assets", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const { category } = req.query;
       let assets;
@@ -682,7 +753,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single asset by ID
-  app.get("/api/assets/:id", async (req, res) => {
+  app.get("/api/assets/:id", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const { id } = req.params;
       const asset = await storage.getAsset(id);
@@ -697,7 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all asset bundles
-  app.get("/api/bundles", async (req, res) => {
+  app.get("/api/bundles", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const bundles = await storage.getAllBundles();
       res.json(bundles);
@@ -708,7 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single bundle by ID
-  app.get("/api/bundles/:id", async (req, res) => {
+  app.get("/api/bundles/:id", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
       const { id } = req.params;
       const bundle = await storage.getBundle(id);
@@ -723,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user's cart items
-  app.get("/api/cart/:userId", async (req, res) => {
+  app.get("/api/cart/:userId", requireRole(UserRole.DEVELOPER), requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       const cartItems = await storage.getCartItems(userId);
@@ -735,9 +806,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add item to cart
-  app.post("/api/cart", async (req, res) => {
+  app.post("/api/cart", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
-      const validatedCartItem = validateAndSanitizeInput(insertCartItemSchema, req.body);
+      const validatedCartItem = validateAndSanitizeInput(insertCartItemSchema, {
+        ...req.body,
+        userId: req.session.userId,
+      });
       const cartItem = await storage.addToCart(validatedCartItem);
       res.status(201).json(cartItem);
     } catch (error) {
@@ -752,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Remove item from cart
-  app.delete("/api/cart/:userId/:itemId", async (req, res) => {
+  app.delete("/api/cart/:userId/:itemId", requireRole(UserRole.DEVELOPER), requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId, itemId } = req.params;
       const removed = await storage.removeFromCart(userId, itemId);
@@ -767,7 +841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clear user's cart
-  app.delete("/api/cart/:userId", async (req, res) => {
+  app.delete("/api/cart/:userId", requireRole(UserRole.DEVELOPER), requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       await storage.clearCart(userId);
@@ -779,9 +853,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create purchase (simplified checkout)
-  app.post("/api/purchases", async (req, res) => {
+  app.post("/api/purchases", requireRole(UserRole.DEVELOPER), async (req, res) => {
     try {
-      const validatedPurchase = validateAndSanitizeInput(insertPurchaseSchema, req.body);
+      const validatedPurchase = validateAndSanitizeInput(insertPurchaseSchema, {
+        ...req.body,
+        userId: req.session.userId,
+      });
       const purchase = await storage.createPurchase(validatedPurchase);
       
       // In a real implementation, this would:
@@ -803,7 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user's purchase history
-  app.get("/api/purchases/:userId", async (req, res) => {
+  app.get("/api/purchases/:userId", requireRole(UserRole.DEVELOPER), requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       const purchases = await storage.getPurchasesByUserId(userId);
@@ -816,7 +893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== SHARED COMMUNITY API ENDPOINTS =====
 
-  app.get("/api/community/posts", async (req: Request, res: Response) => {
+  app.get("/api/community/posts", requireAuth, async (req: Request, res: Response) => {
     const userId = req.session.userId;
     const postsForUser = sharedCommunityPosts.map((post) => applyCommunityCountsForSession(post, userId));
     res.json(postsForUser);
@@ -994,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== GAME LIBRARY API ENDPOINTS =====
 
   // Get user's game library
-  app.get("/api/library", async (req: Request, res: Response) => {
+  app.get("/api/library", requireRole(UserRole.REGULAR), async (req: Request, res: Response) => {
     try {
       // Check if user is authenticated
       if (!req.session.userId) {
@@ -1010,7 +1087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add game to user's library (purchase)
-  app.post("/api/library", async (req: Request, res: Response) => {
+  app.post("/api/library", requireRole(UserRole.REGULAR), async (req: Request, res: Response) => {
     try {
       // Check if user is authenticated
       if (!req.session.userId) {
@@ -1054,7 +1131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== BUTTONZ CHAT API ENDPOINTS =====
 
   // Get all chats
-  app.get("/api/chats", async (req, res) => {
+  app.get("/api/chats", requireAuth, async (req, res) => {
     try {
       const chats = await storage.getAllChats();
       res.json(chats);
@@ -1065,7 +1142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single chat
-  app.get("/api/chats/:chatId", async (req, res) => {
+  app.get("/api/chats/:chatId", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const chat = await storage.getChat(chatId);
@@ -1080,7 +1157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user's chats (chats they're members of)
-  app.get("/api/users/:userId/chats", async (req, res) => {
+  app.get("/api/users/:userId/chats", requireAuth, requireSelfParam("userId"), async (req, res) => {
     try {
       const { userId } = req.params;
       const chats = await storage.getUserChats(userId);
@@ -1092,9 +1169,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new chat
-  app.post("/api/chats", async (req, res) => {
+  app.post("/api/chats", requireAuth, async (req, res) => {
     try {
-      const validatedChat = validateAndSanitizeInput(insertChatSchema, req.body);
+      const validatedChat = validateAndSanitizeInput(insertChatSchema, {
+        ...req.body,
+        createdBy: req.session.userId,
+      });
       const chat = await storage.createChat(validatedChat);
       
       // Auto-add the creator as a member with admin role
@@ -1117,7 +1197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update chat
-  app.patch("/api/chats/:chatId", async (req, res) => {
+  app.patch("/api/chats/:chatId", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const updates = req.body;
@@ -1135,7 +1215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete chat
-  app.delete("/api/chats/:chatId", async (req, res) => {
+  app.delete("/api/chats/:chatId", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const deleted = await storage.deleteChat(chatId);
@@ -1150,7 +1230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get chat members
-  app.get("/api/chats/:chatId/members", async (req, res) => {
+  app.get("/api/chats/:chatId/members", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const members = await storage.getChatMembers(chatId);
@@ -1162,7 +1242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add member to chat
-  app.post("/api/chats/:chatId/members", async (req, res) => {
+  app.post("/api/chats/:chatId/members", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const memberData = { ...req.body, chatId };
@@ -1183,7 +1263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Remove member from chat
-  app.delete("/api/chats/:chatId/members/:userId", async (req, res) => {
+  app.delete("/api/chats/:chatId/members/:userId", requireAuth, async (req, res) => {
     try {
       const { chatId, userId } = req.params;
       const removed = await storage.removeChatMember(chatId, userId);
@@ -1198,7 +1278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get messages in a chat
-  app.get("/api/chats/:chatId/messages", async (req, res) => {
+  app.get("/api/chats/:chatId/messages", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
       const { limit, offset } = req.query;
@@ -1215,10 +1295,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send message to chat
-  app.post("/api/chats/:chatId/messages", async (req, res) => {
+  app.post("/api/chats/:chatId/messages", requireAuth, async (req, res) => {
     try {
       const { chatId } = req.params;
-      const messageData = { ...req.body, chatId };
+      const messageData = { ...req.body, chatId, userId: req.session.userId };
       
       const validatedMessage = validateAndSanitizeInput(insertMessageSchema, messageData);
       const message = await storage.createMessage(validatedMessage);
@@ -1236,7 +1316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update message
-  app.patch("/api/messages/:messageId", async (req, res) => {
+  app.patch("/api/messages/:messageId", requireAuth, async (req, res) => {
     try {
       const { messageId } = req.params;
       const { content } = req.body;
@@ -1258,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete message
-  app.delete("/api/messages/:messageId", async (req, res) => {
+  app.delete("/api/messages/:messageId", requireAuth, async (req, res) => {
     try {
       const { messageId } = req.params;
       const deleted = await storage.deleteMessage(messageId);
